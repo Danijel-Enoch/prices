@@ -16,17 +16,19 @@ contract Prices {
     address public stableToken;
     uint256 public thresholdFilter;
     uint256 public timeWindow;
-    mapping(address => mapping(uint256 => uint256)) public historicalPrices;
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) public historicalPrices;
 
     struct Entry {
         address token;
+        uint256 chainId;
         uint256 timestamp;
     }
 
     /// @notice Emitted when a price for a token is fetched.
     /// @param token The address of the token.
+    /// @param chainId the chain ID of the token.
     /// @param price The fetched price of the token.
-    event Price(address indexed token, uint256 price);
+    event Price(address indexed token, uint256 indexed chainId, uint256 price);
 
     /// @notice Emitted when a new time window for pricing is set.
     /// @param timeWindow The new time window.
@@ -158,56 +160,63 @@ contract Prices {
     /// @dev Only callable by owners and keepers.
     /// @dev Emits a Price event and records it in storage.
     /// @param _token The token to store the price for.
+    /// @param _chainId The chain ID corresponding to the token.
     /// @param _price The price to store for the token.
-    function storePrice(address _token, uint256 _price) public onlyOwnerOrKeeper {
+    function storePrice(address _token, uint256 _chainId, uint256 _price) public onlyOwnerOrKeeper {
         uint256 _timeWindow = timeWindow;
         uint256 timestamp = (block.timestamp / _timeWindow) * _timeWindow;
-        storePrice(_token, _price, timestamp);
+        storePrice(_token, _chainId, _price, timestamp);
     }
 
     /// @notice Records the price for a token with a specific timestamp.
     /// @dev Only callable by owners and keepers.
     /// @dev Emits a Price event and records it in storage.
     /// @param _token The token to store the price for.
+    /// @param _chainId The chain ID corresponding to the token.
     /// @param _price The price to store for the token.
     /// @param _timestamp The timestamp to store the price at.
     /// @dev The timestamp should be a multiple of the time window.
-    function storePrice(address _token, uint256 _price, uint256 _timestamp) public onlyOwnerOrKeeper {
-        historicalPrices[_token][_timestamp] = _price;
-        emit Price(_token, _price);
+    function storePrice(address _token, uint256 _chainId, uint256 _price, uint256 _timestamp) public onlyOwnerOrKeeper {
+        historicalPrices[_token][chainId][_timestamp] = _price;
+        emit Price(_token, _chainId, _price);
     }
 
     /// @notice Records prices for a list of tokens.
     /// @dev Only callable by owners and keepers.
     /// @dev Emits a Price event and records it in storage.
     /// @param _tokens The tokens to store prices for.
+    /// @param _chainIds The chain IDs to store prices for.
     /// @param _prices The prices to store for the tokens.
-    function storeManyPrices(address[] calldata _tokens, uint256[] calldata _prices) public onlyOwnerOrKeeper {
+    function storeManyPrices(address[] calldata _tokens, uint256[] calldata _chainIds, uint256[] calldata _prices) public onlyOwnerOrKeeper {
         address token;
+        uint256 chainId;
         uint256 price;
         uint256 _timeWindow = timeWindow;
         uint256 latestTimestamp = (block.timestamp / _timeWindow) * _timeWindow;
         for (uint i = 0; i < _tokens.length; i++) {
             token = _tokens[i];
+            chainId = _chainIds[i];
             price = _prices[i];
-            historicalPrices[token][latestTimestamp] = price;
-            emit Price(token, price);
+            historicalPrices[token][chainId][latestTimestamp] = price;
+            emit Price(token, chainId, price);
         }
     }
 
     /// @notice Returns most recent historical price for a token based on given timestamp.
     /// @param _token The token to return the price for.
+    /// @param _chainId The chain ID of the token.
     /// @param _timestamp The time to return the price at.
-    function latest(address _token, uint256 _timestamp) public view returns (uint256) {
-        return latest(_token, _timestamp, timeWindow);
+    function latest(address _token, uint256 _chainId, uint256 _timestamp) public view returns (uint256) {
+        return latest(_token, _chainId, _timestamp, timeWindow);
     }
 
     /// @notice Returns most recent historical price for a token based on given timestamp and time window.
     /// @param _token The token to return the price for.
+    /// @param _chainId The chain ID of the token.
     /// @param _timestamp The time to return the price at.
     /// @param _timeWindow The time window to use for the timestamp.
-    function latest(address _token, uint256 _timestamp, uint256 _timeWindow) public view returns (uint256) {
-        return historicalPrices[_token][((_timestamp / _timeWindow) * _timeWindow)];
+    function latest(address _token, uint256 _chainId, uint256 _timestamp, uint256 _timeWindow) public view returns (uint256) {
+        return historicalPrices[_token][_chainId][((_timestamp / _timeWindow) * _timeWindow)];
     }
 
     /// @notice Returns the most recent historical prices for multiple tokens based on given timestamps.
@@ -218,8 +227,9 @@ contract Prices {
         uint256[] memory prices = new uint256[](entries.length);
         for (uint256 i = 0; i < entries.length; i++) {
             address token = entries[i].token;
+            uint256 chainId = entries[i].chainId;
             uint256 timestamp = entries[i].timestamp;
-            prices[i] = historicalPrices[token][((timestamp / _timeWindow) * _timeWindow)];
+            prices[i] = historicalPrices[token][chainId][((timestamp / _timeWindow) * _timeWindow)];
         }
 
         return prices;
